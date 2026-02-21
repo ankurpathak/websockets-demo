@@ -110,6 +110,14 @@ public class SslBundleConfig {
 
     private static void exportToPem(PrivateKey privateKey, X509Certificate cert) throws Exception {
         Path root = Paths.get("").toAbsolutePath();
+        Path probe = root;
+        while (probe != null) {
+            if (probe.resolve("pom.xml").toFile().exists()) {
+                root = probe;
+                break;
+            }
+            probe = probe.getParent();
+        }
         File crtFile = root.resolve("cert.crt").toFile();
         File keyFile = root.resolve("cert.key").toFile();
 
