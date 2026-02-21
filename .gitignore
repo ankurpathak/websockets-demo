@@ -33,3 +33,5 @@ build/
 .vscode/
 
 instances
+cert.crt
+cert.key
