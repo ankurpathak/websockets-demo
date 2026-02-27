@@ -30,8 +30,16 @@ public class JettyDemo {
         // SSL
         // --------------------
         SslContextFactory.Server ssl = new SslContextFactory.Server();
-        KeyStore keystore = SslBundleConfig.create("key", "changeit".toCharArray());
-        ssl.setKeyStore(keystore);
+        KeyStore keyStore = new SelfSignedKeyStoreBuilder()
+                .alias("key")
+                .commonName("demo.local")
+                .addDnsName("demo.local")
+                .addDnsName("localhost")
+                .addIpAddress("127.0.0.1")
+                .validityDays(365)
+                .build();
+
+        ssl.setKeyStore(keyStore);
         ssl.setKeyStorePassword("changeit");
 
 

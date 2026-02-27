@@ -47,7 +47,17 @@ public class SslBundleConfig {
                 log.info("Registering dynamic SSL for port: {}", serverPort);
 
                 // Use the static method to create the KeyStore
-                KeyStore keyStore = create(ALIAS, PASSWORD.toCharArray());
+               /* KeyStore keyStore = new SelfSignedKeyStoreBuilder()
+                        .alias(ALIAS)
+                        .password(PASSWORD.toCharArray())
+                        .commonName("demo.local")
+                        .addDnsName("demo.local")
+                        .addDnsName("localhost")
+                        .addIpAddress("127.0.0.1")
+                        .validityDays(365)
+                        .build(); */
+
+                KeyStore keyStore = PemKeyStoreBuilder.fromHomeCerts(ALIAS, PASSWORD);
 
                 SslStoreBundle storeBundle = SslStoreBundle.of(keyStore, PASSWORD, null);
                 SslBundleKey bundleKey = SslBundleKey.of(PASSWORD, ALIAS);
@@ -62,75 +72,5 @@ public class SslBundleConfig {
         };
     }
 
-    public static KeyStore create(String alias, char[] password) throws Exception {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
-        }
 
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC", BouncyCastleProvider.PROVIDER_NAME);
-        keyGen.initialize(256);
-        KeyPair keyPair = keyGen.generateKeyPair();
-
-        long now = System.currentTimeMillis();
-
-        // --- RESTORED YOUR CN NAME ---
-        X500Name dn = new X500Name("CN=demo.local");
-
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA")
-                .setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                .build(keyPair.getPrivate());
-
-        // Added both to SAN for maximum flexibility
-        GeneralNames san = new GeneralNames(new GeneralName[] {
-                new GeneralName(GeneralName.dNSName, "demo.local"),
-                new GeneralName(GeneralName.dNSName, "localhost"),
-                new GeneralName(GeneralName.iPAddress, "127.0.0.1")
-        });
-
-        JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
-                dn, BigInteger.valueOf(now), new Date(now), new Date(now + 31536000000L), dn, keyPair.getPublic());
-        builder.addExtension(Extension.subjectAlternativeName, false, san);
-
-        X509Certificate cert = new JcaX509CertificateConverter()
-                .setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                .getCertificate(builder.build(signer));
-
-        // Detect port to write Nginx files only once
-        String currentPort = System.getProperty("SERVER_PORT", "8443");
-        if ("8443".equals(currentPort)) {
-            exportToPem(keyPair.getPrivate(), cert);
-        }
-
-        KeyStore ks = KeyStore.getInstance("PKCS12");
-        ks.load(null, password);
-        ks.setKeyEntry(alias, keyPair.getPrivate(), password, new Certificate[]{cert});
-
-        return ks;
-    }
-
-    private static void exportToPem(PrivateKey privateKey, X509Certificate cert) throws Exception {
-        Path root = Paths.get("").toAbsolutePath();
-        Path probe = root;
-        while (probe != null) {
-            if (probe.resolve("pom.xml").toFile().exists()) {
-                root = probe;
-                break;
-            }
-            probe = probe.getParent();
-        }
-        File crtFile = root.resolve("cert.crt").toFile();
-        File keyFile = root.resolve("cert.key").toFile();
-
-        log.info("📂 Exporting Nginx certificates for demo.local...");
-        log.info("📍 Certificate Path: {}", crtFile.getAbsolutePath());
-        log.info("📍 Private Key Path: {}", keyFile.getAbsolutePath());
-
-        try (JcaPEMWriter crtWriter = new JcaPEMWriter(new FileWriter(crtFile));
-             JcaPEMWriter keyWriter = new JcaPEMWriter(new FileWriter(keyFile))) {
-
-            crtWriter.writeObject(cert);
-            keyWriter.writeObject(privateKey);
-            log.info("✅ PEM files written successfully to project root.");
-        }
-    }
 }
